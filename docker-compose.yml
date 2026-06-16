@@ -1,0 +1,112 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: docapp-postgres
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    expose:
+      - 5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docapp-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: docapp-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    expose:
+      - 9000
+      - 9001
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docapp-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: docapp-redis
+    expose:
+      - 6379
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docapp-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: docapp-backend
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+    expose:
+      - 8000
+    networks:
+      - docapp-net
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: docapp-worker
+    entrypoint: ["python", "-m", "app.tasks.worker"]
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+    networks:
+      - docapp-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: docapp-frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT}:80"
+    networks:
+      - docapp-net
+
+volumes:
+  pgdata:
+  minio_data:
+  redis_data:
+
+networks:
+  docapp-net:
+    driver: bridge
