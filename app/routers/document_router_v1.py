@@ -9,14 +9,14 @@ from app.db.session import get_db
 from app.db.models import DocumentoModelDB, PaginaModelDB
 from app.schemas.document import DocumentoResponse
 from app.shared.response import success_response, error_response
-from app.services.minio_service import MinioService
+from app.services.storage_service import StorageService
 from app.services.pdf_service import PdfService
 
 router = APIRouter(prefix="/v1/documents", tags=["Documentos"])
 
 
-def minio_service():
-    return MinioService()
+def storage_service():
+    return StorageService()
 
 
 @router.get("/")
@@ -56,7 +56,7 @@ async def upload_image(
     title: str = Form(...),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    minio_svc: MinioService = Depends(minio_service),
+    storage: StorageService = Depends(storage_service),
 ):
     try:
         contents = await file.read()
@@ -69,7 +69,7 @@ async def upload_image(
         db.add(doc)
         await db.flush()
         object_name = f"{doc.id}/page_001.png"
-        minio_svc.upload_image(contents, object_name)
+        storage.upload_image(contents, object_name)
         page = PaginaModelDB(
             documento_id=doc.id,
             numero_pagina=1,
@@ -94,7 +94,7 @@ async def upload_pdf(
     title: str = Form(...),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    minio_svc: MinioService = Depends(minio_service),
+    storage: StorageService = Depends(storage_service),
 ):
     try:
         contents = await file.read()
@@ -109,7 +109,7 @@ async def upload_pdf(
         await db.flush()
         for i, img_bytes in enumerate(images, start=1):
             object_name = f"{doc.id}/page_{i:03d}.png"
-            minio_svc.upload_image(img_bytes, object_name)
+            storage.upload_image(img_bytes, object_name)
             page = PaginaModelDB(
                 documento_id=doc.id,
                 numero_pagina=i,
@@ -133,7 +133,7 @@ async def upload_pdf(
 async def enhance_all_pages(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
-    minio_svc: MinioService = Depends(minio_service),
+    storage: StorageService = Depends(storage_service),
 ):
     try:
         from app.services.enhancement_service import EnhancementService
@@ -147,12 +147,12 @@ async def enhance_all_pages(
 
         svc = EnhancementService()
         for page in pages:
-            orig_data = minio_svc.get_image(page.ruta_imagen_original)
+            orig_data = storage.get_image(page.ruta_imagen_original)
             if not orig_data:
                 continue
             enhanced_bytes = svc.enhance(orig_data)
             enh_object_name = f"{doc_id}/enhanced/page_{page.numero_pagina:03d}.png"
-            minio_svc.upload_image(enhanced_bytes, enh_object_name)
+            storage.upload_image(enhanced_bytes, enh_object_name)
             page.ruta_imagen_mejorada = enh_object_name
             page.estado = "completed"
 

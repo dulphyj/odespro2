@@ -9,14 +9,14 @@ from app.db.session import get_db
 from app.db.models import PaginaModelDB
 from app.schemas.page import PaginaResponse, PaginaStatusResponse
 from app.shared.response import success_response, error_response
-from app.services.minio_service import MinioService
+from app.services.storage_service import StorageService
 from app.services.enhancement_service import EnhancementService
 
 router = APIRouter(prefix="/v1/pages", tags=["Páginas"])
 
 
-def minio_service():
-    return MinioService()
+def storage_service():
+    return StorageService()
 
 
 @router.get("/{page_id}")
@@ -52,7 +52,7 @@ async def get_page_image(
     page_id: str,
     type: str = "original",
     db: AsyncSession = Depends(get_db),
-    minio_svc: MinioService = Depends(minio_service),
+    storage: StorageService = Depends(storage_service),
 ):
     try:
         result = await db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id))
@@ -62,7 +62,7 @@ async def get_page_image(
         object_name = page.ruta_imagen_mejorada if type == "enhanced" and page.ruta_imagen_mejorada else page.ruta_imagen_original
         if not object_name:
             return error_response(message="Imagen no encontrada")
-        data = minio_svc.get_image(object_name)
+        data = storage.get_image(object_name)
         if not data:
             return error_response(message="Imagen no encontrada en almacenamiento")
         return Response(content=data, media_type="image/png")
@@ -74,20 +74,20 @@ async def get_page_image(
 async def enhance_page(
     page_id: str,
     db: AsyncSession = Depends(get_db),
-    minio_svc: MinioService = Depends(minio_service),
+    storage: StorageService = Depends(storage_service),
 ):
     try:
         result = await db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id))
         page = result.scalar_one_or_none()
         if not page:
             return error_response(message="Página no encontrada")
-        orig_data = minio_svc.get_image(page.ruta_imagen_original)
+        orig_data = storage.get_image(page.ruta_imagen_original)
         if not orig_data:
             return error_response(message="Imagen original no encontrada")
         svc = EnhancementService()
         enhanced_bytes = svc.enhance(orig_data)
         enh_object_name = f"{page.documento_id}/enhanced/page_{page.numero_pagina:03d}.png"
-        minio_svc.upload_image(enhanced_bytes, enh_object_name)
+        storage.upload_image(enhanced_bytes, enh_object_name)
         page.ruta_imagen_mejorada = enh_object_name
         page.estado = "completed"
         await db.commit()

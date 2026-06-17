@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -26,8 +26,8 @@ class PaginaModelDB(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     documento_id = Column(String(36), ForeignKey("documento.id"), nullable=False)
     numero_pagina = Column(Integer, nullable=False)
-    ruta_imagen_original = Column(String(500), nullable=False)
-    ruta_imagen_mejorada = Column(String(500), nullable=True)
+    ruta_imagen_original = Column(Text, nullable=False)
+    ruta_imagen_mejorada = Column(Text, nullable=True)
     estado = Column(String(20), default="pending", nullable=False)
 
     documento = relationship("DocumentoModelDB", back_populates="paginas")
