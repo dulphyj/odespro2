@@ -8,7 +8,6 @@ services:
       POSTGRES_DB: documents_db
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init-scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     expose:
       - 5432
     healthcheck:
@@ -42,41 +41,29 @@ services:
       - docapp-net
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: .
     image: docapp-backend:latest
     container_name: docapp-backend
     environment:
-      DATABASE_URL: postgresql+asyncpg://docapp:docapp_secret_2026@postgres:5432/documents_db
+      SERVICE_PORT: 8000
+      DB_USER: docapp
+      DB_PASSWORD: docapp_secret_2026
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: documents_db
       MINIO_HOST: minio
       MINIO_PORT: 9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin_secret_2026
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_secret_2026
       MINIO_BUCKET: documents
       MINIO_URL: http://minio:9000
-      UPLOAD_MAX_SIZE: "52428800"
+    ports:
+      - "9000:8000"
     depends_on:
       postgres:
         condition: service_started
       minio:
         condition: service_started
-    expose:
-      - 8000
-    restart: unless-stopped
-    networks:
-      - docapp-net
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: docapp-frontend:latest
-    container_name: docapp-frontend
-    depends_on:
-      - backend
-    ports:
-      - "9000:80"
     restart: unless-stopped
     networks:
       - docapp-net

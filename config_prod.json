@@ -1,0 +1,21 @@
+{
+  "service": {
+    "name": "DocApp API",
+    "port": ${SERVICE_PORT}
+  },
+  "database": {
+    "user": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
+    "host": "${DB_HOST}",
+    "port": ${DB_PORT},
+    "database": "${DB_DATABASE}"
+  },
+  "minio": {
+    "host": "${MINIO_HOST}",
+    "port": ${MINIO_PORT},
+    "access_key": "${MINIO_ACCESS_KEY}",
+    "secret_key": "${MINIO_SECRET_KEY}",
+    "bucket": "${MINIO_BUCKET}",
+    "url": "${MINIO_URL}"
+  }
+}

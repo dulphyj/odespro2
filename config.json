@@ -1,0 +1,21 @@
+{
+  "service": {
+    "name": "DocApp API",
+    "port": 8000
+  },
+  "database": {
+    "user": "docapp",
+    "password": "docapp_secret_2026",
+    "host": "postgres",
+    "port": 5432,
+    "database": "documents_db"
+  },
+  "minio": {
+    "host": "minio",
+    "port": 9000,
+    "access_key": "minioadmin",
+    "secret_key": "minioadmin_secret_2026",
+    "bucket": "documents",
+    "url": "http://minio:9000"
+  }
+}
