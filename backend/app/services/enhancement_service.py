@@ -1,76 +1,60 @@
-import cv2
-import numpy as np
-import pytesseract
-from PIL import Image
 import io
+import numpy as np
+from PIL import Image, ImageFilter
 
 
 class EnhancementService:
-    def __init__(self, lang: str = "spa"):
-        self.lang = lang
+    def enhance(self, image_bytes: bytes) -> tuple[bytes, str]:
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = self._deskew(img)
+        img = self._denoise(img)
+        img = self._binarize(img)
+        img = self._crop_borders(img)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue(), ""
 
-    def enhance(self, image_bytes: bytes, do_overlay: bool = False) -> tuple[bytes, str, str | None]:
-        img_array = np.frombuffer(image_bytes, dtype=np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-
-        processed = self._deskew(img)
-        processed = self._denoise(processed)
-        processed = self._binarize(processed)
-        processed = self._crop_borders(processed)
-
-        ocr_text = self._ocr(processed)
-
-        if do_overlay:
-            processed = self._clean_to_text_page(processed, ocr_text)
-
-        _, buffer = cv2.imencode(".png", processed)
-        return buffer.tobytes(), ocr_text, None
-
-    def _deskew(self, img: np.ndarray) -> np.ndarray:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray = cv2.bitwise_not(gray)
-        coords = cv2.findNonZero(gray)
-        if coords is None:
+    def _deskew(self, img: Image.Image) -> Image.Image:
+        try:
+            import math
+            gray = img.convert("L")
+            arr = np.array(gray)
+            arr = 255 - arr
+            coords = np.column_stack(np.where(arr > 0))
+            if coords.shape[0] < 100:
+                return img
+            y, x = coords[:, 0], coords[:, 1]
+            if len(x) < 2:
+                return img
+            A = np.vstack([x, np.ones(len(x))]).T
+            m, _ = np.linalg.lstsq(A, y, rcond=None)[0]
+            angle = math.degrees(math.atan(m))
+            if abs(angle) < 0.5:
+                return img
+            return img.rotate(angle, expand=True, fillcolor=(255, 255, 255))
+        except Exception:
             return img
-        angle = cv2.minAreaRect(coords)[-1]
-        if angle < -45:
-            angle = 90 + angle
-        if abs(angle) < 0.5:
+
+    def _denoise(self, img: Image.Image) -> Image.Image:
+        return img.filter(ImageFilter.MedianFilter(size=3))
+
+    def _binarize(self, img: Image.Image) -> Image.Image:
+        gray = img.convert("L")
+        arr = np.array(gray)
+        thresh = 128
+        binary = np.where(arr > thresh, 255, 0).astype(np.uint8)
+        return Image.fromarray(binary).convert("RGB")
+
+    def _crop_borders(self, img: Image.Image, margin: int = 10) -> Image.Image:
+        arr = np.array(img.convert("L"))
+        mask = arr < 240
+        coords = np.column_stack(np.where(mask))
+        if coords.shape[0] == 0:
             return img
-        h, w = img.shape[:2]
-        center = (w // 2, h // 2)
-        M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        return cv2.warpAffine(
-            img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
-        )
-
-    def _denoise(self, img: np.ndarray) -> np.ndarray:
-        return cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
-
-    def _binarize(self, img: np.ndarray) -> np.ndarray:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
-
-    def _crop_borders(self, img: np.ndarray, margin: int = 10) -> np.ndarray:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY_INV)
-        coords = cv2.findNonZero(thresh)
-        if coords is None:
-            return img
-        x, y, w, h = cv2.boundingRect(coords)
-        x = max(0, x - margin)
-        y = max(0, y - margin)
-        w = min(img.shape[1] - x, w + 2 * margin)
-        h = min(img.shape[0] - y, h + 2 * margin)
-        return img[y : y + h, x : x + w]
-
-    def _ocr(self, img: np.ndarray) -> str:
-        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(rgb)
-        return pytesseract.image_to_string(pil_img, lang=self.lang)
-
-    def _clean_to_text_page(self, img: np.ndarray, text: str) -> np.ndarray:
-        h, w = img.shape[:2]
-        white = np.full((h, w, 3), 255, dtype=np.uint8)
-        return white
+        y0, x0 = coords.min(axis=0)
+        y1, x1 = coords.max(axis=0) + 1
+        x0 = max(0, x0 - margin)
+        y0 = max(0, y0 - margin)
+        x1 = min(img.width, x1 + margin)
+        y1 = min(img.height, y1 + margin)
+        return img.crop((x0, y0, x1, y1))

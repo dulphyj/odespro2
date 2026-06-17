@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Page
 from app.schemas import PageResponse, PageStatus
-from app.services import MinioService
+from app.services import MinioService, EnhancementService
 
 router = APIRouter(prefix="/api/v1/pages", tags=["pages"])
 
@@ -66,15 +66,25 @@ async def get_page_image(
 async def enhance_page(
     page_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    minio_svc: MinioService = Depends(minio_service),
 ):
-    from app.tasks.enhance_task import enqueue_enhance_page
-
     result = await db.execute(select(Page).where(Page.id == page_id))
     page = result.scalar_one_or_none()
     if not page:
         raise HTTPException(404, "Page not found")
 
-    page.status = "processing"
+    orig_data = minio_svc.get_image(page.orig_image_path)
+    if not orig_data:
+        raise HTTPException(404, "Original image not found in storage")
+
+    svc = EnhancementService()
+    enhanced_bytes, _ = svc.enhance(orig_data)
+
+    enh_object_name = f"{page.document_id}/enhanced/page_{page.page_number:03d}.png"
+    minio_svc.upload_image(enhanced_bytes, enh_object_name)
+
+    page.enh_image_path = enh_object_name
+    page.status = "completed"
     await db.commit()
-    await enqueue_enhance_page(str(page.id))
-    return PageStatus(id=page.id, status="processing", enh_image_path=None)
+
+    return PageStatus(id=page.id, status="completed", enh_image_path=enh_object_name)

@@ -1,14 +1,7 @@
-FROM madnight/docker-alpine-tesseract:latest AS tesseract
-
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-
-COPY --from=tesseract /usr/bin/tesseract /usr/bin/tesseract
-COPY --from=tesseract /usr/share/tessdata /usr/share/tessdata
-
-ENV TESSDATA_PREFIX=/usr/share/tessdata
 
 WORKDIR /app
 

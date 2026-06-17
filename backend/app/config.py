@@ -12,10 +12,6 @@ class Settings(BaseSettings):
     minio_bucket: str = "documents"
     minio_url: str = "http://minio:9000"
 
-    redis_url: str = "redis://redis:6379"
-
-    tesseract_lang: str = "spa"
-
     upload_max_size: int = 52428800
 
     model_config = {"extra": "ignore"}

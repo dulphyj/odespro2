@@ -41,22 +41,6 @@ services:
     networks:
       - docapp-net
 
-  redis:
-    image: redis:7-alpine
-    container_name: docapp-redis
-    expose:
-      - 6379
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - docapp-net
-
   backend:
     build:
       context: ./backend
@@ -71,47 +55,14 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin_secret_2026
       MINIO_BUCKET: documents
       MINIO_URL: http://minio:9000
-      REDIS_URL: redis://redis:6379
-      TESSERACT_LANG: spa
       UPLOAD_MAX_SIZE: "52428800"
     depends_on:
       postgres:
         condition: service_started
       minio:
-        condition: service_started
-      redis:
         condition: service_started
     expose:
       - 8000
-    restart: unless-stopped
-    networks:
-      - docapp-net
-
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: docapp-worker:latest
-    container_name: docapp-worker
-    entrypoint: ["python", "-m", "app.tasks.worker"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://docapp:docapp_secret_2026@postgres:5432/documents_db
-      MINIO_HOST: minio
-      MINIO_PORT: 9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin_secret_2026
-      MINIO_BUCKET: documents
-      MINIO_URL: http://minio:9000
-      REDIS_URL: redis://redis:6379
-      TESSERACT_LANG: spa
-      UPLOAD_MAX_SIZE: "52428800"
-    depends_on:
-      postgres:
-        condition: service_started
-      minio:
-        condition: service_started
-      redis:
-        condition: service_started
     restart: unless-stopped
     networks:
       - docapp-net
@@ -133,7 +84,6 @@ services:
 volumes:
   pgdata:
   minio_data:
-  redis_data:
 
 networks:
   docapp-net:

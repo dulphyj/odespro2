@@ -118,19 +118,27 @@ async def upload_pdf(
 async def enhance_all_pages(
     doc_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    minio_svc: MinioService = Depends(minio_service),
 ):
-    from app.tasks.enhance_task import enqueue_enhance_page
+    from app.services import EnhancementService
 
     result = await db.execute(
-        select(Page).where(Page.document_id == doc_id, Page.status == "pending")
+        select(Page).where(Page.document_id == doc_id)
     )
     pages = result.scalars().all()
     if not pages:
-        raise HTTPException(400, "No pending pages to enhance")
+        raise HTTPException(404, "No pages found")
 
+    svc = EnhancementService()
     for page in pages:
-        page.status = "processing"
-        await enqueue_enhance_page(str(page.id))
+        orig_data = minio_svc.get_image(page.orig_image_path)
+        if not orig_data:
+            continue
+        enhanced_bytes, _ = svc.enhance(orig_data)
+        enh_object_name = f"{doc_id}/enhanced/page_{page.page_number:03d}.png"
+        minio_svc.upload_image(enhanced_bytes, enh_object_name)
+        page.enh_image_path = enh_object_name
+        page.status = "completed"
 
     await db.commit()
-    return {"message": f"Enqueued {len(pages)} pages for enhancement"}
+    return {"message": f"Enhanced {len(pages)} pages"}
