@@ -4,14 +4,23 @@ import re
 import numpy as np
 from PIL import Image
 
+try:
+    import easyocr
+    _EASYOCR_AVAILABLE = True
+except ImportError:
+    _EASYOCR_AVAILABLE = False
+
 
 class OcrService:
     _reader = None
 
     @classmethod
+    def is_available(cls) -> bool:
+        return _EASYOCR_AVAILABLE
+
+    @classmethod
     def _get_reader(cls):
         if cls._reader is None:
-            import easyocr
             cls._reader = easyocr.Reader(["es", "en"], gpu=False)
         return cls._reader
 
@@ -21,6 +30,8 @@ class OcrService:
 
     @classmethod
     def extract_text(cls, image_bytes: bytes) -> str:
+        if not _EASYOCR_AVAILABLE:
+            raise RuntimeError("easyocr no está instalado. Ejecuta: pip install easyocr")
         reader = cls._get_reader()
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         arr = np.array(img)

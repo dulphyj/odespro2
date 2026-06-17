@@ -164,6 +164,9 @@ def ocr_page(
     db: Session = Depends(get_db),
 ):
     try:
+        if not OcrService.is_available():
+            return error_response(message="OCR no disponible. Instala easyocr: pip install easyocr")
+
         page = db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id)).scalar_one_or_none()
         if not page:
             return error_response(message="Página no encontrada")
