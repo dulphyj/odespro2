@@ -15,4 +15,4 @@ SQLAlchemy==2.0.50
 starlette==0.46.2
 typing-extensions==4.15.0
 uvicorn==0.34.2
-aiosqlite==0.20.0
+

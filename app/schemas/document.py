@@ -1,7 +1,9 @@
-from typing import Optional
+from typing import List
 from datetime import datetime
 
 from pydantic import BaseModel
+
+from app.schemas.page import PaginaResponse
 
 
 class DocumentoRequest(BaseModel):
@@ -17,7 +19,7 @@ class DocumentoResponse(BaseModel):
     nombre_original: str
     total_paginas: int
     fecha_creacion: datetime
-    paginas: list[dict] = []
+    paginas: List[PaginaResponse] = []
 
     class Config:
         from_attributes = True

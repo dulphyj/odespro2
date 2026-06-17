@@ -1,9 +1,7 @@
-import uuid
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import PaginaModelDB
@@ -15,15 +13,10 @@ from app.services.enhancement_service import EnhancementService
 router = APIRouter(prefix="/v1/pages", tags=["Páginas"])
 
 
-def storage_service():
-    return StorageService()
-
-
 @router.get("/{page_id}")
-async def get_page(page_id: str, db: AsyncSession = Depends(get_db)):
+def get_page(page_id: str, db: Session = Depends(get_db)):
     try:
-        result = await db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id))
-        page = result.scalar_one_or_none()
+        page = db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id)).scalar_one_or_none()
         if not page:
             return error_response(message="Página no encontrada")
         return success_response(data=PaginaResponse.model_validate(page))
@@ -32,10 +25,9 @@ async def get_page(page_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{page_id}/status")
-async def get_page_status(page_id: str, db: AsyncSession = Depends(get_db)):
+def get_page_status(page_id: str, db: Session = Depends(get_db)):
     try:
-        result = await db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id))
-        page = result.scalar_one_or_none()
+        page = db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id)).scalar_one_or_none()
         if not page:
             return error_response(message="Página no encontrada")
         return success_response(data=PaginaStatusResponse(
@@ -48,15 +40,14 @@ async def get_page_status(page_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{page_id}/image")
-async def get_page_image(
+def get_page_image(
     page_id: str,
     type: str = "original",
-    db: AsyncSession = Depends(get_db),
-    storage: StorageService = Depends(storage_service),
+    db: Session = Depends(get_db),
 ):
     try:
-        result = await db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id))
-        page = result.scalar_one_or_none()
+        storage = StorageService()
+        page = db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id)).scalar_one_or_none()
         if not page:
             return error_response(message="Página no encontrada")
         object_name = page.ruta_imagen_mejorada if type == "enhanced" and page.ruta_imagen_mejorada else page.ruta_imagen_original
@@ -64,37 +55,35 @@ async def get_page_image(
             return error_response(message="Imagen no encontrada")
         data = storage.get_image(object_name)
         if not data:
-            return error_response(message="Imagen no encontrada en almacenamiento")
+            return error_response(message="Imagen no encontrada")
         return Response(content=data, media_type="image/png")
     except Exception as e:
         return error_response(message=str(e), exc=e)
 
 
 @router.post("/{page_id}/enhance")
-async def enhance_page(
-    page_id: str,
-    db: AsyncSession = Depends(get_db),
-    storage: StorageService = Depends(storage_service),
-):
+def enhance_page(page_id: str, db: Session = Depends(get_db)):
     try:
-        result = await db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id))
-        page = result.scalar_one_or_none()
+        storage = StorageService()
+        enhancer = EnhancementService()
+
+        page = db.execute(select(PaginaModelDB).where(PaginaModelDB.id == page_id)).scalar_one_or_none()
         if not page:
             return error_response(message="Página no encontrada")
+
         orig_data = storage.get_image(page.ruta_imagen_original)
         if not orig_data:
             return error_response(message="Imagen original no encontrada")
-        svc = EnhancementService()
-        enhanced_bytes = svc.enhance(orig_data)
-        enh_object_name = f"{page.documento_id}/enhanced/page_{page.numero_pagina:03d}.png"
-        storage.upload_image(enhanced_bytes, enh_object_name)
-        page.ruta_imagen_mejorada = enh_object_name
+
+        enhanced_bytes = enhancer.enhance(orig_data)
+        enh_name = f"{page.documento_id}/enhanced/page_{page.numero_pagina:03d}.png"
+        storage.upload_image(enhanced_bytes, enh_name)
+        page.ruta_imagen_mejorada = enh_name
         page.estado = "completed"
-        await db.commit()
+        db.commit()
+
         return success_response(data=PaginaStatusResponse(
-            id=page.id,
-            estado="completed",
-            ruta_imagen_mejorada=enh_object_name,
+            id=page.id, estado="completed", ruta_imagen_mejorada=enh_name,
         ), message="Imagen mejorada")
     except Exception as e:
         return error_response(message=str(e), exc=e)

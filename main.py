@@ -14,11 +14,10 @@ logger = setup_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    Base.metadata.create_all(bind=engine)
     logger.info("Tablas creadas / verificadas")
     yield
-    await engine.dispose()
+    engine.dispose()
 
 
 app = FastAPI(
