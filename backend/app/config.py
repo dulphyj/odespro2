@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     minio_root_password: str = "minioadmin_secret_2026"
     minio_bucket: str = "documents"
     minio_url: str = "http://minio:9000"
-    minio_public_url: str = "http://localhost:9000"
 
     redis_url: str = "redis://redis:6379"
 
@@ -19,7 +18,7 @@ class Settings(BaseSettings):
 
     upload_max_size: int = 52428800
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"extra": "ignore"}
 
 
 @lru_cache

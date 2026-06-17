@@ -13,9 +13,10 @@ services:
       - 5432
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U docapp"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - docapp-net
 
@@ -32,10 +33,11 @@ services:
       - 9000
       - 9001
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - docapp-net
 
@@ -48,9 +50,10 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - docapp-net
 
@@ -58,6 +61,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: docapp-backend:latest
     container_name: docapp-backend
     environment:
       DATABASE_URL: postgresql+asyncpg://docapp:docapp_secret_2026@postgres:5432/documents_db
@@ -72,13 +76,14 @@ services:
       UPLOAD_MAX_SIZE: "52428800"
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
       minio:
-        condition: service_healthy
+        condition: service_started
       redis:
-        condition: service_healthy
+        condition: service_started
     expose:
       - 8000
+    restart: unless-stopped
     networks:
       - docapp-net
 
@@ -86,6 +91,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: docapp-worker:latest
     container_name: docapp-worker
     entrypoint: ["python", "-m", "app.tasks.worker"]
     environment:
@@ -101,11 +107,12 @@ services:
       UPLOAD_MAX_SIZE: "52428800"
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
       minio:
-        condition: service_healthy
+        condition: service_started
       redis:
-        condition: service_healthy
+        condition: service_started
+    restart: unless-stopped
     networks:
       - docapp-net
 
@@ -113,11 +120,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: docapp-frontend:latest
     container_name: docapp-frontend
     depends_on:
       - backend
     ports:
       - "9000:80"
+    restart: unless-stopped
     networks:
       - docapp-net
 
