@@ -15,14 +15,11 @@ except ImportError:
 
 
 def _init_com_sta():
-    """Inicializa COM en modo STA para el hilo actual (ignora si ya iniciado)."""
     import ctypes
-    hr = ctypes.windll.ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED
-    return hr  # 0 = OK, 1 = S_FALSE (ya iniciado)
+    ctypes.windll.ole32.CoInitializeEx(None, 2)
 
 
 class WiaScanner:
-    """Scanner via WIA (Windows Image Acquisition) — funciona con Python 64-bit."""
 
     @staticmethod
     def is_available() -> bool:
@@ -56,21 +53,27 @@ class WiaScanner:
             return []
 
     @staticmethod
-    def scan(scanner_index: int = 0, show_ui: bool = True) -> bytes:
+    def scan(scanner_index: int = 0, show_ui: bool = True, pages: int = 1) -> list[bytes]:
         if not _WIA_AVAILABLE:
-            raise RuntimeError("WIA no disponible (instala comtypes: pip install comtypes)")
+            raise RuntimeError("WIA no disponible (pip install comtypes)")
 
+        results = []
+        for p in range(pages):
+            result = WiaScanner._scan_single(scanner_index, show_ui)
+            results.append(result)
+        return results
+
+    @staticmethod
+    def _scan_single(scanner_index: int, show_ui: bool) -> bytes:
         if show_ui:
             result = [None]
             error = [None]
 
-            def _scan_sta():
+            def _dialog():
                 try:
                     _init_com_sta()
                     dialog = comtypes.client.CreateObject("WIA.CommonDialog")
-                    image = dialog.ShowAcquireImage(
-                        1, 1, 0, 0, 0, 0,
-                    )
+                    image = dialog.ShowAcquireImage(1, 1, 0, 0, 0, 0)
                     if image:
                         buf = io.BytesIO()
                         for i in range(1, image.FileData.Count + 1):
@@ -88,7 +91,7 @@ class WiaScanner:
                 except Exception as e:
                     error[0] = e
 
-            t = threading.Thread(target=_scan_sta, daemon=True)
+            t = threading.Thread(target=_dialog, daemon=True)
             t.start()
             t.join(timeout=120)
             if error[0]:
@@ -99,11 +102,10 @@ class WiaScanner:
 
         _init_com_sta()
         wia = comtypes.client.CreateObject("WIA.DeviceManager")
-        count = wia.DeviceInfos.Count
-        if count == 0:
+        if wia.DeviceInfos.Count == 0:
             raise RuntimeError("No se encontraron escáneres")
-        if scanner_index >= count:
-            raise RuntimeError(f"Escáner índice {scanner_index} no encontrado (hay {count})")
+        if scanner_index >= wia.DeviceInfos.Count:
+            raise RuntimeError(f"Escáner índice {scanner_index} no encontrado")
 
         info = wia.DeviceInfos.Item(scanner_index + 1)
         device = info.Connect()

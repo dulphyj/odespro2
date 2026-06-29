@@ -221,7 +221,8 @@ class TwainScanner:
         scanner_index: int = 0,
         show_ui: bool = True,
         dpi: int = 200,
-    ) -> bytes:
+        pages: int = 1,
+    ) -> list[bytes]:
         app = TW_IDENTITY()
         app.Version.MajorNum = 1
         app.Version.MinorNum = 0
@@ -283,7 +284,7 @@ class TwainScanner:
             image_bytes = cls._transfer_image(source)
 
             cls._call(source, DG_CONTROL, DAT_IDENTITY, MSG_CLOSEDS, None)
-            return image_bytes
+            return [image_bytes]
         finally:
             cls._call(None, DG_CONTROL, DAT_PARENT, MSG_CLOSEDSM, parent)
 

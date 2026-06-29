@@ -26,13 +26,17 @@ def list_scanners():
 @router.post("/scan")
 def scan_document(
     scanner_index: int = Query(0, description="Índice del escáner"),
+    pages: int = Query(1, description="Número de páginas a escanear"),
     dpi: int = Query(200, description="Resolución DPI"),
 ):
     try:
         if not ScannerBackend.is_available():
             return error_response(message="No hay escáner disponible (WIA/TWAIN)")
-        image_bytes = ScannerBackend.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi)
-        return Response(content=image_bytes, media_type="image/png")
+        images = ScannerBackend.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi, pages=pages)
+        if pages == 1:
+            return Response(content=images[0], media_type="image/png")
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"pages": len(images), "detail": "Escanea uno por uno, usa scan-and-upload para guardar múltiples páginas"})
     except Exception as e:
         return error_response(message=str(e), exc=e)
 
@@ -41,6 +45,7 @@ def scan_document(
 def scan_and_upload(
     title: str = Query("Escaneo", description="Título del documento"),
     scanner_index: int = Query(0, description="Índice del escáner"),
+    pages: int = Query(1, description="Número de páginas a escanear"),
     dpi: int = Query(200, description="Resolución DPI"),
     db: Session = Depends(get_db),
 ):
@@ -49,27 +54,32 @@ def scan_and_upload(
             return error_response(message="No hay escáner disponible (WIA/TWAIN)")
 
         storage = StorageService()
-        image_bytes = ScannerBackend.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi)
+        images = ScannerBackend.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi, pages=pages)
 
         doc = DocumentoModelDB(
             titulo=title,
             tipo_documento="scan",
             nombre_original=f"{title}.png",
-            total_paginas=1,
+            total_paginas=len(images),
         )
         db.add(doc)
         db.flush()
 
-        object_name = f"{doc.id}/page_001.png"
-        page = PaginaModelDB(
-            documento_id=doc.id,
-            numero_pagina=1,
-            ruta_imagen_original=object_name,
-        )
-        db.add(page)
+        object_names = []
+        for i, img_bytes in enumerate(images):
+            object_name = f"{doc.id}/page_{i+1:03d}.png"
+            page = PaginaModelDB(
+                documento_id=doc.id,
+                numero_pagina=i + 1,
+                ruta_imagen_original=object_name,
+            )
+            db.add(page)
+            object_names.append(object_name)
+
         db.commit()
 
-        storage.upload_image(image_bytes, object_name)
+        for i, img_bytes in enumerate(images):
+            storage.upload_image(img_bytes, object_names[i])
 
         db.refresh(doc)
         from sqlalchemy import select
