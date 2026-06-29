@@ -53,7 +53,7 @@ class WiaScanner:
             return []
 
     @staticmethod
-    def scan(scanner_index: int = 0, show_ui: bool = True, pages: int = 1) -> list[bytes]:
+    def scan(scanner_index: int = 0, show_ui: bool = True, dpi: int = 200, pages: int = 1) -> list[bytes]:
         """
         pages == 0: modo automático (activa alimentador ADF, escanea hasta vaciar)
         pages  > 0: modo manual, número exacto de páginas
@@ -62,15 +62,24 @@ class WiaScanner:
             raise RuntimeError("WIA no disponible (pip install comtypes)")
 
         if pages == 0:
-            return WiaScanner._scan_auto(scanner_index)
+            return WiaScanner._scan_auto(scanner_index, dpi)
         results = []
         for _ in range(pages):
-            result = WiaScanner._scan_single(scanner_index, show_ui)
+            result = WiaScanner._scan_single(scanner_index, show_ui, dpi)
             results.append(result)
         return results
 
     @staticmethod
-    def _scan_auto(scanner_index: int) -> list[bytes]:
+    def _set_dpi(item, dpi: int):
+        """Intenta setear DPI en el ítem WIA (property 6147=X_RES, 6148=Y_RES)."""
+        try:
+            item.Properties.Item(6147).Value = dpi  # WIA_IPS_X_RES
+            item.Properties.Item(6148).Value = dpi  # WIA_IPS_Y_RES
+        except Exception:
+            pass
+
+    @staticmethod
+    def _scan_auto(scanner_index: int, dpi: int = 200) -> list[bytes]:
         _init_com_sta()
         wia = comtypes.client.CreateObject("WIA.DeviceManager")
         if wia.DeviceInfos.Count == 0:
@@ -82,6 +91,8 @@ class WiaScanner:
         device = info.Connect()
         try:
             item = device.Items.Item(1)
+
+            WiaScanner._set_dpi(item, dpi)
 
             # Activar modo alimentador (ADF) si está disponible
             try:
@@ -116,7 +127,7 @@ class WiaScanner:
                 pass
 
     @staticmethod
-    def _scan_single(scanner_index: int, show_ui: bool) -> bytes:
+    def _scan_single(scanner_index: int, show_ui: bool, dpi: int = 200) -> bytes:
         if show_ui:
             result = [None]
             error = [None]
@@ -163,6 +174,7 @@ class WiaScanner:
         device = info.Connect()
         try:
             item = device.Items.Item(1)
+            WiaScanner._set_dpi(item, dpi)
             fmt = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
             image_file = item.Transfer(fmt)
             buf = io.BytesIO()
