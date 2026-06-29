@@ -19,6 +19,7 @@ uvicorn==0.34.2
 
 # Dependencias solo desktop (opcionales)
 # easyocr==1.7.2  # OCR - instalar si se necesita
+comtypes==1.4.16  # WIA para escáner (Windows)
 
 # Dependencias para empaquetar
 # pyinstaller==6.12.0  # Descomentar para buildear .exe

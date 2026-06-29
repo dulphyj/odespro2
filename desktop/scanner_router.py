@@ -7,7 +7,7 @@ from app.db.models import DocumentoModelDB, PaginaModelDB
 from app.schemas.document import DocumentoResponse
 from app.shared.response import success_response, error_response
 from app.services.storage_service import StorageService
-from desktop.twain_scanner import TwainScanner
+from desktop.scanner_backend import ScannerBackend
 
 router = APIRouter(prefix="/v1/scanner", tags=["Escáner"])
 
@@ -15,9 +15,9 @@ router = APIRouter(prefix="/v1/scanner", tags=["Escáner"])
 @router.get("/list")
 def list_scanners():
     try:
-        if not TwainScanner.is_available():
-            return error_response(message="TWAIN no disponible en este equipo")
-        scanners = TwainScanner.list_scanners()
+        if not ScannerBackend.is_available():
+            return error_response(message="No hay escáner disponible (WIA/TWAIN)")
+        scanners = ScannerBackend.list_scanners()
         return success_response(data={"scanners": scanners})
     except Exception as e:
         return error_response(message=str(e), exc=e)
@@ -29,9 +29,9 @@ def scan_document(
     dpi: int = Query(200, description="Resolución DPI"),
 ):
     try:
-        if not TwainScanner.is_available():
-            return error_response(message="TWAIN no disponible en este equipo")
-        image_bytes = TwainScanner.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi)
+        if not ScannerBackend.is_available():
+            return error_response(message="No hay escáner disponible (WIA/TWAIN)")
+        image_bytes = ScannerBackend.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi)
         return Response(content=image_bytes, media_type="image/png")
     except Exception as e:
         return error_response(message=str(e), exc=e)
@@ -45,11 +45,11 @@ def scan_and_upload(
     db: Session = Depends(get_db),
 ):
     try:
-        if not TwainScanner.is_available():
-            return error_response(message="TWAIN no disponible en este equipo")
+        if not ScannerBackend.is_available():
+            return error_response(message="No hay escáner disponible (WIA/TWAIN)")
 
         storage = StorageService()
-        image_bytes = TwainScanner.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi)
+        image_bytes = ScannerBackend.scan(scanner_index=scanner_index, show_ui=True, dpi=dpi)
 
         doc = DocumentoModelDB(
             titulo=title,

@@ -11,7 +11,7 @@ from app.routers.page_router_v1 import router as page_router
 from app.shared.logger import setup_logger
 from app.db.base import Base
 from app.db.session import engine
-from desktop.twain_scanner import TwainScanner
+from desktop.scanner_backend import ScannerBackend
 from desktop.scanner_router import router as scanner_router
 
 logger = setup_logger()
@@ -37,16 +37,13 @@ app.add_middleware(
 def startup():
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas creadas / verificadas")
-    if TwainScanner.is_available():
-        logger.info("TWAIN disponible - modo escáner activado")
-        scanners = TwainScanner.list_scanners()
-        if scanners:
-            for s in scanners:
-                logger.info(f"  Escáner: {s['name']}")
-        else:
-            logger.info("  No se encontraron escáneres")
+    if ScannerBackend.is_available():
+        logger.info("Escáner detectado - modo escáner activado")
+        scanners = ScannerBackend.list_scanners()
+        for s in scanners:
+            logger.info(f"  Escáner: {s['name']}")
     else:
-        logger.info("TWAIN no disponible en este equipo")
+        logger.info("No se detectaron escáneres (WIA/TWAIN)")
 
 
 @app.on_event("shutdown")
