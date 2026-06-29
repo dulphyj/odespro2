@@ -54,14 +54,66 @@ class WiaScanner:
 
     @staticmethod
     def scan(scanner_index: int = 0, show_ui: bool = True, pages: int = 1) -> list[bytes]:
+        """
+        pages == 0: modo automático (activa alimentador ADF, escanea hasta vaciar)
+        pages  > 0: modo manual, número exacto de páginas
+        """
         if not _WIA_AVAILABLE:
             raise RuntimeError("WIA no disponible (pip install comtypes)")
 
+        if pages == 0:
+            return WiaScanner._scan_auto(scanner_index)
         results = []
-        for p in range(pages):
+        for _ in range(pages):
             result = WiaScanner._scan_single(scanner_index, show_ui)
             results.append(result)
         return results
+
+    @staticmethod
+    def _scan_auto(scanner_index: int) -> list[bytes]:
+        _init_com_sta()
+        wia = comtypes.client.CreateObject("WIA.DeviceManager")
+        if wia.DeviceInfos.Count == 0:
+            raise RuntimeError("No se encontraron escáneres")
+        if scanner_index >= wia.DeviceInfos.Count:
+            raise RuntimeError(f"Escáner índice {scanner_index} no encontrado")
+
+        info = wia.DeviceInfos.Item(scanner_index + 1)
+        device = info.Connect()
+        try:
+            item = device.Items.Item(1)
+
+            # Activar modo alimentador (ADF) si está disponible
+            try:
+                prop = item.Properties.Item(3088)  # WIA_DPS_DOCUMENT_HANDLING_SELECT
+                prop.Value = 1  # FEEDER
+            except Exception:
+                pass
+
+            fmt = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
+            results = []
+            while True:
+                try:
+                    image_file = item.Transfer(fmt)
+                    buf = io.BytesIO()
+                    for i in range(1, image_file.FileData.Count + 1):
+                        buf.write(image_file.FileData.Item(i))
+                    data = buf.getvalue()
+                    if data:
+                        pil_img = Image.open(io.BytesIO(data))
+                        out = io.BytesIO()
+                        pil_img.save(out, format="PNG")
+                        results.append(out.getvalue())
+                except Exception:
+                    break
+            if not results:
+                raise RuntimeError("No se obtuvieron imágenes del escáner")
+            return results
+        finally:
+            try:
+                device.Close()
+            except Exception:
+                pass
 
     @staticmethod
     def _scan_single(scanner_index: int, show_ui: bool) -> bytes:
