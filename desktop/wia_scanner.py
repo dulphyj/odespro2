@@ -80,29 +80,37 @@ class WiaScanner:
 
     @staticmethod
     def _scan_auto(scanner_index: int, dpi: int = 200) -> list[bytes]:
+        results = []
+
+        # Paso 1: diálogo WIA una vez -> el usuario configura (flatbed/ADF) y escanea la 1ª página
+        first = WiaScanner._scan_single(scanner_index, show_ui=True, dpi=dpi)
+        results.append(first)
+
+        # Paso 2: si el alimentador tenía más hojas, intentar escanear el resto
+        try:
+            WiaScanner._scan_remaining(scanner_index, dpi, results)
+        except Exception:
+            pass
+
+        if not results:
+            raise RuntimeError("No se obtuvieron imágenes del escáner")
+        return results
+
+    @staticmethod
+    def _scan_remaining(scanner_index: int, dpi: int, results: list[bytes]):
         _init_com_sta()
         wia = comtypes.client.CreateObject("WIA.DeviceManager")
-        if wia.DeviceInfos.Count == 0:
-            raise RuntimeError("No se encontraron escáneres")
-        if scanner_index >= wia.DeviceInfos.Count:
-            raise RuntimeError(f"Escáner índice {scanner_index} no encontrado")
-
         info = wia.DeviceInfos.Item(scanner_index + 1)
         device = info.Connect()
         try:
             item = device.Items.Item(1)
-
             WiaScanner._set_dpi(item, dpi)
-
-            # Activar modo alimentador (ADF) si está disponible
             try:
-                prop = item.Properties.Item(3088)  # WIA_DPS_DOCUMENT_HANDLING_SELECT
-                prop.Value = 1  # FEEDER
+                prop = item.Properties.Item(3088)
+                prop.Value = 1
             except Exception:
                 pass
-
             fmt = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
-            results = []
             while True:
                 try:
                     image_file = item.Transfer(fmt)
@@ -117,9 +125,6 @@ class WiaScanner:
                         results.append(out.getvalue())
                 except Exception:
                     break
-            if not results:
-                raise RuntimeError("No se obtuvieron imágenes del escáner")
-            return results
         finally:
             try:
                 device.Close()
