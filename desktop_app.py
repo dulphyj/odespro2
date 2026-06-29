@@ -61,7 +61,7 @@ app.include_router(scanner_router)
 
 
 def main():
-    port = int(os.environ.get("DOCAPP_PORT", 5000))
+    port = int(os.environ.get("DOCAPP_PORT", 8000))
     logger.info(f"Iniciando DocApp Desktop en http://localhost:{port}")
     logger.info(f"Documentación: http://localhost:{port}/docs")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
