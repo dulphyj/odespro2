@@ -1,0 +1,24 @@
+# Dependencias base (igual que requirements.txt)
+annotated-types==0.7.0
+anyio==4.9.0
+click==8.3.3
+colorama==0.4.6
+fastapi==0.115.12
+greenlet==3.5.1
+h11==0.16.0
+idna==3.10
+numpy==2.2.4
+Pillow==11.2.1
+pydantic==2.11.4
+pydantic_core==2.33.2
+python-multipart==0.0.20
+SQLAlchemy==2.0.50
+starlette==0.46.2
+typing-extensions==4.15.0
+uvicorn==0.34.2
+
+# Dependencias solo desktop (opcionales)
+# easyocr==1.7.2  # OCR - instalar si se necesita
+
+# Dependencias para empaquetar
+# pyinstaller==6.12.0  # Descomentar para buildear .exe
