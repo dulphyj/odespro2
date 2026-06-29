@@ -57,8 +57,26 @@ app.include_router(page_router)
 app.include_router(scanner_router)
 
 
+def _free_port(port: int):
+    """Mata proceso anterior si está usando el puerto."""
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            f'netstat -ano | findstr ":{port} "', shell=True, text=True
+        )
+        for line in out.strip().splitlines():
+            parts = line.split()
+            if len(parts) >= 5 and "LISTENING" in line:
+                pid = parts[-1]
+                subprocess.run(f"taskkill /F /PID {pid} 2>nul", shell=True)
+                break
+    except Exception:
+        pass
+
+
 def main():
     port = int(os.environ.get("DOCAPP_PORT", 8000))
+    _free_port(port)
     logger.info(f"Iniciando DocApp Desktop en http://localhost:{port}")
     logger.info(f"Documentación: http://localhost:{port}/docs")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
