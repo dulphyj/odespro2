@@ -13,9 +13,13 @@ except ImportError:
     pass
 
 
-def _init_com_sta():
+def _init_com():
     import ctypes
-    ctypes.windll.ole32.CoInitializeEx(None, 2)
+    hr = ctypes.windll.ole32.CoInitializeEx(None, 2)  # STA
+    if hr == -2147417850:  # RPC_E_CHANGED_MODE
+        ctypes.windll.ole32.CoUninitialize()
+        hr = ctypes.windll.ole32.CoInitializeEx(None, 0)  # MTA
+    return hr
 
 
 class WiaScanner:
@@ -25,7 +29,7 @@ class WiaScanner:
         if not _WIA_AVAILABLE:
             return False
         try:
-            _init_com_sta()
+            _init_com()
             wia = comtypes.client.CreateObject("WIA.DeviceManager")
             return wia.DeviceInfos.Count > 0
         except Exception:
@@ -36,7 +40,7 @@ class WiaScanner:
         if not _WIA_AVAILABLE:
             return []
         try:
-            _init_com_sta()
+            _init_com()
             wia = comtypes.client.CreateObject("WIA.DeviceManager")
             result = []
             for i in range(1, wia.DeviceInfos.Count + 1):
@@ -82,7 +86,7 @@ class WiaScanner:
 
         def _dialog():
             try:
-                _init_com_sta()
+                _init_com()
                 dialog = comtypes.client.CreateObject("WIA.CommonDialog")
                 fmt_tiff = "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"
                 image = dialog.ShowAcquireImage(1, 1, 0, fmt_tiff, scan_count, 0)
