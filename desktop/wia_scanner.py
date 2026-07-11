@@ -13,23 +13,28 @@ except ImportError:
     pass
 
 
-def _init_com():
-    import ctypes
-    hr = ctypes.windll.ole32.CoInitializeEx(None, 2)  # STA
-    if hr == -2147417850:  # RPC_E_CHANGED_MODE
-        ctypes.windll.ole32.CoUninitialize()
-        hr = ctypes.windll.ole32.CoInitializeEx(None, 0)  # MTA
-    return hr
-
-
 class WiaScanner:
+
+    @staticmethod
+    def _try_init_com() -> bool:
+        """Intenta inicializar COM en STA o MTA. Retorna True si ok."""
+        try:
+            import ctypes
+            hr = ctypes.windll.ole32.CoInitializeEx(None, 2)
+            if hr == -2147417850:
+                ctypes.windll.ole32.CoUninitialize()
+                hr = ctypes.windll.ole32.CoInitializeEx(None, 0)
+            return hr >= 0 or hr == 1
+        except Exception:
+            return False
 
     @staticmethod
     def is_available() -> bool:
         if not _WIA_AVAILABLE:
             return False
+        if not WiaScanner._try_init_com():
+            return False
         try:
-            _init_com()
             wia = comtypes.client.CreateObject("WIA.DeviceManager")
             return wia.DeviceInfos.Count > 0
         except Exception:
@@ -39,8 +44,8 @@ class WiaScanner:
     def list_scanners() -> list[dict]:
         if not _WIA_AVAILABLE:
             return []
+        WiaScanner._try_init_com()
         try:
-            _init_com()
             wia = comtypes.client.CreateObject("WIA.DeviceManager")
             result = []
             for i in range(1, wia.DeviceInfos.Count + 1):
@@ -86,7 +91,7 @@ class WiaScanner:
 
         def _dialog():
             try:
-                _init_com()
+                WiaScanner._try_init_com()
                 dialog = comtypes.client.CreateObject("WIA.CommonDialog")
                 fmt_tiff = "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"
                 image = dialog.ShowAcquireImage(1, 1, 0, fmt_tiff, scan_count, 0)
