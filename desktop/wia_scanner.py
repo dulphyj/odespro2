@@ -141,7 +141,7 @@ class WiaScanner:
                 try:
                     _init_com_sta()
                     dialog = comtypes.client.CreateObject("WIA.CommonDialog")
-                    image = dialog.ShowAcquireImage(1, 1, 0, 0, 0, 0)
+                    image = dialog.ShowAcquireImage(1, 1, 0, "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}", 0, 0)
                     if image:
                         buf = io.BytesIO()
                         for i in range(1, image.FileData.Count + 1):
