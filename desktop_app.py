@@ -37,13 +37,22 @@ app.add_middleware(
 def startup():
     Base.metadata.create_all(bind=engine)
     logger.info("Tablas creadas / verificadas")
-    if ScannerBackend.is_available():
-        logger.info("Escáner detectado - modo escáner activado")
-        scanners = ScannerBackend.list_scanners()
-        for s in scanners:
-            logger.info(f"  Escáner: {s['name']}")
+    if os.environ.get("DOCAPP_MOCK_SCANNER", "").lower() in ("1", "true"):
+        ScannerBackend.force_mock(True)
+        logger.info("Modo MOCK escáner activado (DOCAPP_MOCK_SCANNER=true)")
     else:
-        logger.info("No se detectaron escáneres (WIA/TWAIN)")
+        from desktop.wia_scanner import WiaScanner
+        from desktop.twain_scanner import TwainScanner
+        if WiaScanner.is_available():
+            logger.info("Escáner WIA detectado")
+        elif TwainScanner.is_available():
+            logger.info("Escáner TWAIN detectado")
+        else:
+            logger.info("No se detectaron escáneres WIA/TWAIN - usando modo MOCK para demo")
+            ScannerBackend.force_mock(True)
+    scanners = ScannerBackend.list_scanners()
+    for s in scanners:
+        logger.info(f"  Escáner: {s['name']}")
 
 
 @app.on_event("shutdown")
