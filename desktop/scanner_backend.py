@@ -39,6 +39,6 @@ class ScannerBackend:
         return backend.list_scanners()
 
     @staticmethod
-    def scan(scanner_index: int = 0, show_ui: bool = True, dpi: int = 200, pages: int = 1) -> list[bytes]:
+    def scan(scanner_index: int = 0, pages: int = 1) -> list[bytes]:
         backend = ScannerBackend._get_backend()
-        return backend.scan(scanner_index=scanner_index, show_ui=show_ui and not ScannerBackend._force_mock, dpi=dpi, pages=pages)
+        return backend.scan(scanner_index=scanner_index, pages=pages)

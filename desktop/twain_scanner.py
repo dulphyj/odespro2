@@ -219,11 +219,8 @@ class TwainScanner:
     def scan(
         cls,
         scanner_index: int = 0,
-        show_ui: bool = True,
-        dpi: int = 200,
         pages: int = 1,
     ) -> list[bytes]:
-        _ = dpi  # TWAIN maneja su propia resolución, ignoramos dpi por ahora
         app = TW_IDENTITY()
         app.Version.MajorNum = 1
         app.Version.MinorNum = 0

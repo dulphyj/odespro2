@@ -26,17 +26,16 @@ def list_scanners():
 @router.post("/scan")
 def scan_document(
     scanner_index: int = Query(0, description="Índice del escáner"),
-    pages: int = Query(0, description="0=auto (alimentador ADF), N=número exacto de páginas"),
-    dpi: int = Query(200, description="Resolución DPI"),
+    pages: int = Query(0, description="0=ADF (escanea todas), N=flatbed (N páginas)"),
 ):
     try:
         if not ScannerBackend.is_available():
             return error_response(message="No hay escáner disponible (WIA/TWAIN)")
-        images = ScannerBackend.scan(scanner_index=scanner_index, show_ui=pages > 0, dpi=dpi, pages=pages)
+        images = ScannerBackend.scan(scanner_index=scanner_index, pages=pages)
         if len(images) == 1:
             return Response(content=images[0], media_type="image/png")
         from fastapi.responses import JSONResponse
-        return JSONResponse({"pages": len(images), "detail": "Múltiples páginas escaneadas, usa scan-and-upload para guardar"})
+        return JSONResponse({"pages": len(images), "detail": "Escaneo completado, usa scan-and-upload para guardar"})
     except Exception as e:
         return error_response(message=str(e), exc=e)
 
@@ -45,8 +44,7 @@ def scan_document(
 def scan_and_upload(
     title: str = Query("Escaneo", description="Título del documento"),
     scanner_index: int = Query(0, description="Índice del escáner"),
-    pages: int = Query(0, description="0=auto (alimentador ADF), N=número exacto de páginas"),
-    dpi: int = Query(200, description="Resolución DPI"),
+    pages: int = Query(0, description="0=ADF (escanea todas), N=flatbed (N páginas)"),
     db: Session = Depends(get_db),
 ):
     try:
@@ -54,7 +52,7 @@ def scan_and_upload(
             return error_response(message="No hay escáner disponible (WIA/TWAIN)")
 
         storage = StorageService()
-        images = ScannerBackend.scan(scanner_index=scanner_index, show_ui=pages > 0, dpi=dpi, pages=pages)
+        images = ScannerBackend.scan(scanner_index=scanner_index, pages=pages)
 
         doc = DocumentoModelDB(
             titulo=title,
