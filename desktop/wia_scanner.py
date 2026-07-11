@@ -62,20 +62,20 @@ class WiaScanner:
             raise RuntimeError("WIA no disponible (pip install comtypes)")
 
         if pages == 0:
-            return WiaScanner._scan_with_dialog(scanner_index, pages=0)
+            return WiaScanner._scan_with_dialog(scanner_index, scan_count=999)
         results = []
         for _ in range(pages):
-            pages_from_dialog = WiaScanner._scan_with_dialog(scanner_index, pages=1)
-            results.extend(pages_from_dialog)
+            result = WiaScanner._scan_with_dialog(scanner_index, scan_count=1)
+            results.extend(result)
         return results
 
     @staticmethod
-    def _scan_with_dialog(scanner_index: int, pages: int = 0) -> list[bytes]:
+    def _scan_with_dialog(scanner_index: int, scan_count: int = 1) -> list[bytes]:
         """
         Abre el diálogo WIA con formato TIFF (soporta multipágina del ADF).
         Extrae cada frame como PNG individual.
-        pages=0 → ADF (dialog escanea todas las hojas)
-        pages=N → escanea N páginas
+        scan_count=999 → ADF (escanea hasta 999 páginas)
+        scan_count=1   → flatbed (1 página)
         """
         result_pages: list[bytes] = []
         error: list[Exception | None] = [None]
@@ -85,7 +85,7 @@ class WiaScanner:
                 _init_com_sta()
                 dialog = comtypes.client.CreateObject("WIA.CommonDialog")
                 fmt_tiff = "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"
-                image = dialog.ShowAcquireImage(1, 1, 0, fmt_tiff, pages, 0)
+                image = dialog.ShowAcquireImage(1, 1, 0, fmt_tiff, scan_count, 0)
                 if image:
                     buf = io.BytesIO()
                     for i in range(1, image.FileData.Count + 1):
