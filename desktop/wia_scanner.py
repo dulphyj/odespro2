@@ -80,24 +80,6 @@ class WiaScanner:
 
     @staticmethod
     def _scan_auto(scanner_index: int, dpi: int = 200) -> list[bytes]:
-        results = []
-
-        # Paso 1: diálogo WIA una vez -> el usuario configura (flatbed/ADF) y escanea la 1ª página
-        first = WiaScanner._scan_single(scanner_index, show_ui=True, dpi=dpi)
-        results.append(first)
-
-        # Paso 2: si el alimentador tenía más hojas, intentar escanear el resto
-        try:
-            WiaScanner._scan_remaining(scanner_index, dpi, results)
-        except Exception:
-            pass
-
-        if not results:
-            raise RuntimeError("No se obtuvieron imágenes del escáner")
-        return results
-
-    @staticmethod
-    def _scan_remaining(scanner_index: int, dpi: int, results: list[bytes]):
         _init_com_sta()
         wia = comtypes.client.CreateObject("WIA.DeviceManager")
         info = wia.DeviceInfos.Item(scanner_index + 1)
@@ -105,12 +87,20 @@ class WiaScanner:
         try:
             item = device.Items.Item(1)
             WiaScanner._set_dpi(item, dpi)
+
+            # Activar modo alimentador (ADF) si el escáner lo soporta
             try:
-                prop = item.Properties.Item(3088)
-                prop.Value = 1
+                item.Properties.Item(3088).Value = 1  # FEEDER
             except Exception:
                 pass
+            # Escanear todas las páginas del alimentador
+            try:
+                item.Properties.Item(3090).Value = 0  # 0 = todas
+            except Exception:
+                pass
+
             fmt = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
+            results = []
             while True:
                 try:
                     image_file = item.Transfer(fmt)
@@ -125,6 +115,9 @@ class WiaScanner:
                         results.append(out.getvalue())
                 except Exception:
                     break
+            if not results:
+                raise RuntimeError("No se obtuvieron imágenes del escáner")
+            return results
         finally:
             try:
                 device.Close()
