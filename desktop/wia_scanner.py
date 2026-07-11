@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import threading
-from typing import Optional
 
 from PIL import Image
 
@@ -55,8 +54,9 @@ class WiaScanner:
     @staticmethod
     def scan(scanner_index: int = 0, show_ui: bool = True, dpi: int = 200, pages: int = 1) -> list[bytes]:
         """
-        pages == 0: modo automático (activa alimentador ADF, escanea hasta vaciar)
-        pages  > 0: modo manual, número exacto de páginas
+        pages == 0: modo continuo — abre el diálogo una y otra vez hasta
+                      que el usuario cancele. Ideal para flatbed o ADF manual.
+        pages  > 0: modo exacto, N páginas.
         """
         if not _WIA_AVAILABLE:
             raise RuntimeError("WIA no disponible (pip install comtypes)")
@@ -70,59 +70,23 @@ class WiaScanner:
         return results
 
     @staticmethod
-    def _set_dpi(item, dpi: int):
-        """Intenta setear DPI en el ítem WIA (property 6147=X_RES, 6148=Y_RES)."""
-        try:
-            item.Properties.Item(6147).Value = dpi  # WIA_IPS_X_RES
-            item.Properties.Item(6148).Value = dpi  # WIA_IPS_Y_RES
-        except Exception:
-            pass
-
-    @staticmethod
     def _scan_auto(scanner_index: int, dpi: int = 200) -> list[bytes]:
-        _init_com_sta()
-        wia = comtypes.client.CreateObject("WIA.DeviceManager")
-        info = wia.DeviceInfos.Item(scanner_index + 1)
-        device = info.Connect()
-        try:
-            item = device.Items.Item(1)
-            WiaScanner._set_dpi(item, dpi)
-
-            # Activar modo alimentador (ADF) si el escáner lo soporta
+        results = []
+        while True:
             try:
-                item.Properties.Item(3088).Value = 1  # FEEDER
+                page = WiaScanner._scan_single(scanner_index, show_ui=True, dpi=dpi)
+                results.append(page)
+            except RuntimeError as e:
+                if "cancel" in str(e).lower():
+                    if results:
+                        break
+                    raise
+                raise
             except Exception:
-                pass
-            # Escanear todas las páginas del alimentador
-            try:
-                item.Properties.Item(3090).Value = 0  # 0 = todas
-            except Exception:
-                pass
-
-            fmt = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
-            results = []
-            while True:
-                try:
-                    image_file = item.Transfer(fmt)
-                    buf = io.BytesIO()
-                    for i in range(1, image_file.FileData.Count + 1):
-                        buf.write(image_file.FileData.Item(i))
-                    data = buf.getvalue()
-                    if data:
-                        pil_img = Image.open(io.BytesIO(data))
-                        out = io.BytesIO()
-                        pil_img.save(out, format="PNG")
-                        results.append(out.getvalue())
-                except Exception:
-                    break
-            if not results:
-                raise RuntimeError("No se obtuvieron imágenes del escáner")
-            return results
-        finally:
-            try:
-                device.Close()
-            except Exception:
-                pass
+                break
+        if not results:
+            raise RuntimeError("No se obtuvieron imágenes del escáner")
+        return results
 
     @staticmethod
     def _scan_single(scanner_index: int, show_ui: bool, dpi: int = 200) -> bytes:
@@ -172,7 +136,6 @@ class WiaScanner:
         device = info.Connect()
         try:
             item = device.Items.Item(1)
-            WiaScanner._set_dpi(item, dpi)
             fmt = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
             image_file = item.Transfer(fmt)
             buf = io.BytesIO()
